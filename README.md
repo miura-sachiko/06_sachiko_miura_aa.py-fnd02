@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>python基礎講座を受講して</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --card:#111a33;
+      --text:#e9ecf5;
+      --muted:#b9c0d6;
+      --accent:#7aa7ff;
+      --border:rgba(255,255,255,.12);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      background: radial-gradient(1200px 800px at 20% 10%, rgba(122,167,255,.18), transparent 60%),
+                  radial-gradient(900px 700px at 85% 20%, rgba(160,120,255,.14), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+      overflow:hidden;
+    }
+    .deck{
+      height:100vh;
+      width:100vw;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:4vw;
+    }
+
+    .slide{
+      width:min(1100px, 92vw);
+      height:min(620px, 86vh);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid var(--border);
+      border-radius:24px;
+      /* ✅ footerがabsoluteなので、下側に十分な余白を確保（ここが重なり対策の本体） */
+      padding:52px 56px 130px;  /* ←下だけ増やした */
+      box-shadow: 0 30px 80px rgba(0,0,0,.45);
+      display:none;
+      position:relative;
+    }
+    .slide.active{display:block}
+
+    .kicker{
+      font-size:18px;
+      color:var(--muted);
+      letter-spacing:.04em;
+      margin:0 0 10px 0;
+    }
+    h1{
+      font-size:52px;
+      line-height:1.15;
+      margin:0 0 18px 0;
+    }
+    h2{
+      font-size:40px;
+      margin:0 0 18px 0;
+      line-height:1.2;
+    }
+    .sub{
+      font-size:22px;
+      color:var(--muted);
+      margin:0 0 26px 0;
+      line-height:1.6;
+    }
+    ul{
+      margin:18px 0 0 0;
+      padding-left:26px;
+      font-size:26px;
+      line-height:1.7;
+    }
+    li{margin:10px 0}
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:18px;
+      margin-top:18px;
+    }
+    .card{
+      background:rgba(17,26,51,.65);
+      border:1px solid var(--border);
+      border-radius:18px;
+      padding:18px 18px;
+    }
+    .card h3{
+      margin:0 0 8px 0;
+      font-size:22px;
+      color:var(--accent);
+    }
+    .card p{
+      margin:0;
+      font-size:22px;
+      line-height:1.55;
+      color:var(--text);
+    }
+
+    /* footer：左=案内/章、中央=戻る次へ、右=ページ/作者 */
+    .footer{
+      position:absolute;
+      left:56px;
+      right:56px;
+      bottom:22px;
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items:center;
+      gap:12px;
+      color:var(--muted);
+      font-size:16px;
+      z-index:2; /* 念のため */
+    }
+    .footer .left{justify-self:start;}
+    .footer .center{justify-self:center; display:flex; gap:10px; align-items:center;}
+    .footer .right{
+      justify-self:end;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .pill{
+      border:1px solid var(--border);
+      padding:8px 12px;
+      border-radius:999px;
+      background:rgba(0,0,0,.12);
+      white-space:nowrap;
+    }
+    .accent{
+      color:var(--accent);
+      font-weight:700;
+    }
+    .big-quote{
+      margin-top:26px;
+      padding:18px 18px;
+      border-left:4px solid var(--accent);
+      background:rgba(0,0,0,.14);
+      border-radius:12px;
+      font-size:26px;
+      line-height:1.6;
+    }
+    .note{
+      font-size:18px;
+      color:var(--muted);
+      margin-top:10px;
+    }
+
+    /* 共通ボタン */
+    .btn{
+      border:1px solid var(--border);
+      background:rgba(0,0,0,.14);
+      color:var(--text);
+      border-radius:999px;
+      padding:10px 14px;
+      font-size:16px;
+      cursor:pointer;
+    }
+    .btn:disabled{opacity:.4; cursor:not-allowed;}
+
+    /* 外部リンクボタン（Bパターン：別タブ） */
+    .link-btn{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      text-decoration:none;
+      border:1px solid var(--border);
+      background:rgba(0,0,0,.14);
+      color:var(--text);
+      border-radius:999px;
+      padding:12px 16px;
+      font-size:18px;
+      position:relative;
+      z-index:1;
+    }
+    .link-btn:hover{ border-color: rgba(122,167,255,.55); }
+    .link-btn .icon{
+      width:10px;
+      height:10px;
+      border-right:2px solid var(--accent);
+      border-top:2px solid var(--accent);
+      transform: rotate(45deg);
+      margin-left:2px;
+    }
+
+    @media (max-width: 680px){
+      /* 下padding増やす */
+      .slide{padding:34px 28px 140px}
+      h1{font-size:40px}
+      h2{font-size:32px}
+      ul{font-size:22px}
+      .grid{grid-template-columns: 1fr}
+
+      .footer{left:28px; right:28px}
+      /* 中央寄せ */
+      .footer{grid-template-columns: 1fr; justify-items:center; gap:10px;}
+      .footer .left,.footer .center,.footer .right{justify-self:center;}
+      .footer .right{justify-content:center;}
+    }
+  </style>
+</head>
+
+<body>
+  <div class="deck">
+
+    <!-- Slide 1 -->
+    <section class="slide active" data-title="タイトル">
+      <p class="kicker"></p>
+      <h1>継続利用でき安全に<span class="accent">引き継げる仕組み</span>へ</h1>
+      <p class="sub">技能系 × デジタル × 製造<br>現場で「使う・管理する」立場からの学び</p>
+
+      <div class="big-quote">
+        デジタルと製造運営の間を、<span class="accent">つなげる人</span>になっていきたい
+      </div>
+
+      <div class="footer">
+        <div class="left">
+          <span class="pill">← → / Space で移動</span>
+        </div>
+        <div class="center">
+          <button class="btn prevBtn" type="button">戻る</button>
+          <button class="btn nextBtn" type="button">次へ</button>
+        </div>
+        <div class="right">
+          <span class="pill"><span class="page">1</span> / 5</span>
+          <span class="pill"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 2 -->
+    <section class="slide" data-title="受講した背景">
+      <h2>受講した背景</h2>
+      <p class="sub">部署はデジタルに強くない。でもツールは増え、継続管理が必要。</p>
+      <ul>
+        <li><span class="accent">Python</span> を含む部内ツール</li>
+        <li>仲間が作ったツール／横展開されたツール</li>
+        <li>デジタルツールの安全・品質等の維持管理を <span class="accent">技術員室として管理</span> できる状態にしたい</li>
+      </ul>
+
+      <div class="footer">
+        <div class="left"><span class="pill">2. 受講した背景</span></div>
+        <div class="center">
+          <button class="btn prevBtn" type="button">戻る</button>
+          <button class="btn nextBtn" type="button">次へ</button>
+        </div>
+        <div class="right"><span class="pill"><span class="page">2</span> / 5</span></div>
+      </div>
+    </section>
+
+    <!-- Slide 3 -->
+    <section class="slide" data-title="デジタルは諸刃の剣">
+      <h2>デジタルは新しいツールも常に増え続ける</h2>
+      <p class="sub">便利だけど、管理できないと危険が増える。</p>
+
+      <div class="grid">
+        <div class="card">
+          <h3>属人化</h3>
+          <p>作った人しか触れず、引き継げない</p>
+        </div>
+        <div class="card">
+          <h3>ブラックボックス化</h3>
+          <p>何が正しいのか分からないまま運用</p>
+        </div>
+        <div class="card">
+          <h3>改修ミス</h3>
+          <p>直したら別の所が壊れる、が起きやすい</p>
+        </div>
+        <div class="card">
+          <h3>品質の維持・法律規定の管理</h3>
+          <p>「動く」より <span class="accent">「安全に維持」</span> を優先</p>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div class="left"><span class="pill">3. 便利だけではない</span></div>
+        <div class="center">
+          <button class="btn prevBtn" type="button">戻る</button>
+          <button class="btn nextBtn" type="button">次へ</button>
+        </div>
+        <div class="right"><span class="pill"><span class="page">3</span> / 5</span></div>
+      </div>
+    </section>
+
+    <!-- Slide 4 -->
+    <section class="slide" data-title="大切にしたい3つ">
+      <h2>ルール</h2>
+
+      <div class="grid">
+        <div class="card">
+          <h3>① 引き継ぐ責任</h3>
+          <p>動けば終わりではなく、次に使う人が困らないところまで考える</p>
+        </div>
+        <div class="card">
+          <h3>② 苦手な人の気持ち</h3>
+          <p>意見を都合よく解釈していないか、常に自分を疑う</p>
+        </div>
+        <div class="card" style="grid-column: 1 / -1;">
+          <h3>③ 感謝と、責任を押し付けない</h3>
+          <p>
+            原因の追究<br>
+            問題は個人ではなく <span class="accent">仕組みとして改善</span> する
+          </p>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div class="left"><span class="pill">4. 3つのこと</span></div>
+        <div class="center">
+          <button class="btn prevBtn" type="button">戻る</button>
+          <button class="btn nextBtn" type="button">次へ</button>
+        </div>
+        <div class="right"><span class="pill"><span class="page">4</span> / 5</span></div>
+      </div>
+    </section>
+
+    <!-- Slide 5 -->
+    <section class="slide" data-title="学びとこれから">
+      <h2>学びとこれから</h2>
+      <ul>
+        <li>最大の学び：<span class="accent">テスト関数・ミュータブルイミュータブル・イテラブルとイテレータです</span>（正しさを仕組みで確認）</li>
+        <li>これまで：printで確認→修正→またprint…で時間がかかっていた</li>
+        <li>今はまだ使いこなせないが、<span class="accent">提案できる視点や自分の苦手なことの把握ができました。</span>を得た</li>
+      </ul>
+
+      <div class="big-quote">
+        強みは活かし、弱みは伸ばしながら<br>
+        <span class="accent">製造現場で必要なデジタルの維持管理能力</span>のスキルを学びたい
+      </div>
+たい
+      <!-- Bパターン：別タブで開くリンクボタン（URLを差し替えてください） -->
+      <div style="margin-top:18px; margin-bottom:10px;">
+        <a class="link-btn"
+           href="https://toyotajp-my.sharepoint.com/personal/1311553_tmc_twfr_toyota_co_jp/Documents/%E3%83%87%E3%82%B9%E3%82%AF%E3%83%88%E3%83%83%E3%83%97/GDI%E7%99%BA%E8%A1%A8%E8%B3%87%E6%96%99.pptx?web=1"
+           target="_blank"
+           rel="noopener noreferrer">
+          関連ページを見る <span class="icon" aria-hidden="true"></span>
+        </a>
+      </div>
+
+      <div class="footer">
+        <div class="left"><span class="pill">5. 学びとこれから</span></div>
+        <div class="center">
+          <button class="btn prevBtn" type="button">戻る</button>
+          <button class="btn nextBtn" type="button">次へ</button>
+        </div>
+        <div class="right"><span class="pill"><span class="page">5</span> / 5</span></div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    let idx = 0;
+
+    function render(){
+      slides.forEach((s,i)=>s.classList.toggle("active", i===idx));
+
+      // ページ表示更新（.pageで統一）
+      slides.forEach((s,i)=>{
+        const el = s.querySelector(".page");
+        if(el) el.textContent = String(i+1);
+      });
+
+      // タイトル更新
+      const total = slides.length;
+      const title = slides[idx].dataset.title ? `(${idx+1}/${total}) ${slides[idx].dataset.title}` : `(${idx+1}/${total})`;
+      document.title = `Python講義で得た学び ${title}`;
+
+      // ボタン有効/無効
+      document.querySelectorAll(".prevBtn").forEach(b => b.disabled = (idx === 0));
+      document.querySelectorAll(".nextBtn").forEach(b => b.disabled = (idx === total - 1));
+    }
+
+    function next(){ if(idx < slides.length-1){ idx++; render(); } }
+    function prev(){ if(idx > 0){ idx--; render(); } }
+
+    // キー操作
+    document.addEventListener("keydown", (e)=>{
+      if(["ArrowRight"," ","PageDown"].includes(e.key)) next();
+      if(["ArrowLeft","PageUp"].includes(e.key)) prev();
+    });
+
+    // クリック操作（1本化）
+    document.addEventListener("click", (e)=>{
+      // 1) ボタン（戻る/次へ）
+      const btn = e.target.closest("button");
+      if(btn){
+        e.preventDefault();
+        if(btn.classList.contains("nextBtn")) next();
+        if(btn.classList.contains("prevBtn")) prev();
+        return;
+      }
+
+      // 2) リンク（別ページへボタン）→ スライド進めない
+      const link = e.target.closest("a");
+      if(link){
+        return;
+      }
+
+      // 3) テキスト選択中は進めない
+      const sel = window.getSelection();
+      if(sel && String(sel).length > 0) return;
+
+      // 4) それ以外のクリックで次へ
+      next();
+    });
+
+    render();
+  </script>
+</body>
+</html>
