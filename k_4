@@ -1,0 +1,199 @@
+import pandas as pd
+from openpyxl import load_workbook
+from datetime import datetime
+import unicodedata
+import os
+# ===== 設定・パスまとめ =====
+EXCEL_PATH = r"C:\Users\1311553\OneDrive - トヨタ自動車株式会社\powerappsトライ用 - 接続確認用\2025工程内不良\4機工程内不良入力シート.xlsx"
+CODE_WHITE = "GJ412"
+CODE_YELLOW = "GJ413"
+DEFAULT_SHEET_NAME = "TPS合格数"
+DEFAULT_SHEET_NAME_1M = "〇M合格数"
+csv_path = r"C:/Users/1311553/OneDrive - トヨタ自動車株式会社/GJ_現場力向上ボード - エクセル出力/TEST/4機合格数2.csv"
+# 文字列正規化関数
+def normalize_str(s):
+    if s is None:
+        return ""
+    s = str(s).strip()
+    s = unicodedata.normalize("NFKC", s)
+    return s
+# ExcelをWindowsの既定アプリで開く関数
+def open_excel(filepath):
+    if not filepath:
+        return
+    try:
+        os.startfile(filepath)
+    except Exception as e:
+        print(f"Excelを開く際にエラーが発生しました: {e}")
+def step2(csv_path, excel_path=None, sheet_name=DEFAULT_SHEET_NAME, sheet_name_1M=DEFAULT_SHEET_NAME_1M):
+    if excel_path is None:
+        excel_path = EXCEL_PATH
+    # 1: CSVデータ読み込み
+    csv_df = pd.read_csv(csv_path)
+    csv_df["日付"] = pd.to_datetime(csv_df["日付"], format="%Y年%m月%d日", errors="coerce")
+    csv_df["年"] = csv_df["日付"].dt.year
+    csv_df["月"] = csv_df["日付"].dt.month
+    # 2: 文字列正規化
+    csv_df["品質会議資料名_norm"] = csv_df["品質会議資料名"].apply(normalize_str)
+    # 3: 白・黄コードで分割
+    csv_df_tps = csv_df[csv_df["組コード"].isin([CODE_WHITE, CODE_YELLOW])].copy()
+    csv_df_tps["直"] = csv_df_tps["組コード"].map({CODE_WHITE: "白", CODE_YELLOW: "黄"})
+    csv_df_m = csv_df[~csv_df["組コード"].isin([CODE_WHITE, CODE_YELLOW])]
+    # 4: 今月データの存在確認
+    now = datetime.now()
+    now_year = now.year
+    now_month = now.month
+    df_nowmonth = csv_df[(csv_df["年"] == now_year) & (csv_df["月"] == now_month)]
+    if df_nowmonth.empty:
+        print(f"CSVに今月({now_year}年{now_month}月)のデータがありません。処理を中止しました。")
+        return
+    # 5: Excelファイルの読み込み
+    wb = load_workbook(excel_path)
+    # 6: 〇M合格数シート処理
+    if sheet_name_1M in wb.sheetnames:
+        ws_m = wb[sheet_name_1M]
+        ws_m.protection.sheet = False
+        month_map = {col: col - 2 for col in range(3, 15)}  # C=1月～N=12月
+        # 対象期間決定
+        if now_month == 1:
+            target_years = [now_year - 1] * 12
+            target_months = list(range(1, 13))
+        else:
+            target_years = [now_year] * (now_month - 1)
+            target_months = list(range(1, now_month))
+        for row in range(3, ws_m.max_row + 1):
+            品名_excel = ws_m.cell(row, 2).value
+            if not 品名_excel:
+                continue
+            品名_excel_norm = normalize_str(品名_excel)
+            df_filtered = csv_df_m[csv_df_m["品質会議資料名_norm"] == 品名_excel_norm]
+            print(f"〇M合格数シート 行 {row}: Excelの品名='{品名_excel_norm}' → CSV抽出件数={len(df_filtered)}")
+            if len(df_filtered) == 0:
+                prefix = 品名_excel_norm[:3]
+                similar_names = csv_df_m[csv_df_m["品質会議資料名_norm"].str.contains(prefix, na=False)]["品質会議資料名"].unique()
+                print(f"  CSVに完全一致なし。類似の品質会議資料名例: {similar_names}")
+            else:
+                unique_names = df_filtered["品質会議資料名"].unique()
+                print(f"  CSV内の該当する品質会議資料名一覧: {unique_names}")
+            for col, 月 in month_map.items():
+                if 月 not in target_months:
+                    # 今月以降は処理しない
+                    continue
+                year_to_use = target_years[target_months.index(月)]
+                df_match = df_filtered[(df_filtered["年"] == year_to_use) & (df_filtered["月"] == 月)]
+                if not df_match.empty:
+                    合計 = int(df_match["合格数"].sum())
+                    ws_m.cell(row, col).value = 合計
+                else:
+                    ws_m.cell(row, col).value = None
+        # 合計行検出（B列に「合計」の文字を探す）
+        合計終了行 = None
+        for row in range(3, ws_m.max_row + 1):
+            cell_val = ws_m.cell(row, 2).value
+            if cell_val and str(cell_val).strip() == "合計":
+                合計終了行 = row
+                break
+        if 合計終了行 is None:
+            合計終了行 = 22
+            print(f"2列目に「合計」の文字が見つかりませんでした。合計行を{合計終了行}行目に固定します。")
+        合計開始行 = 3
+        合計書込行 = 合計終了行
+        for col in range(3, 15):
+            total = 0
+            for row in range(合計開始行, 合計終了行):
+                val = ws_m.cell(row, col).value
+                if isinstance(val, (int, float)):
+                    total += val
+            ws_m.cell(合計書込行, col).value = total
+        ws_m.protection.sheet = True
+        print(f"シート {sheet_name_1M} の転記と合計行の入力が完了しました。")
+    else:
+        print(f"シート {sheet_name_1M} は存在しません。処理をスキップします。")
+    # 7: TPS合格数シート処理
+    if sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        ws.protection.sheet = False
+        print("=== Excel 読み込み直後の品名・直の一覧 ===")
+        for r in range(2, ws.max_row + 1):
+            品名 = ws.cell(r, 1).value
+            直 = ws.cell(r, 2).value
+            print(f"行 {r}: 品名={品名}, 直={直}")
+        month_cols = {m: m + 2 for m in range(1, 13)}  # 1月=3列目
+        # 既存データクリア
+        for r in range(3, ws.max_row + 1):
+            for col in range(3, 15):
+                cell = ws.cell(r, col)
+                if cell.value is not None and isinstance(cell.value, (int, float, str)):
+                    cell.value = None
+        prev_品名 = None
+        # 対象期間決定
+        if now_month == 1:
+            target_years = [now_year - 1] * 12
+            target_months = list(range(1, 13))
+        else:
+            target_years = [now_year] * (now_month - 1)
+            target_months = list(range(1, now_month))
+        for r in range(2, ws.max_row + 1):
+            品名 = ws.cell(r, 1).value
+            直 = ws.cell(r, 2).value
+            if 直 is None:
+                continue
+            直 = str(直).strip()
+            if 品名 and str(品名).strip() != "":
+                品名 = str(品名).strip()
+                if 直 == "白":
+                    prev_品名 = 品名
+            else:
+                if 直 == "黄" and prev_品名 is not None:
+                    品名 = prev_品名
+                    prev_品名 = None
+                else:
+                    continue
+            if 直 == "合計":
+                continue
+            df_filtered = csv_df_tps[csv_df_tps["品質会議資料名_norm"] == normalize_str(品名)]
+            for y, m in zip(target_years, target_months):
+                col = month_cols[m]
+                if 直 == "白":
+                    df_match = df_filtered[
+                        (df_filtered["組コード"] == CODE_WHITE) &
+                        (df_filtered["年"] == y) &
+                        (df_filtered["月"] == m)
+                    ]
+                elif 直 == "黄":
+                    df_match = df_filtered[
+                        (df_filtered["組コード"] == CODE_YELLOW) &
+                        (df_filtered["年"] == y) &
+                        (df_filtered["月"] == m)
+                    ]
+                else:
+                    df_match = pd.DataFrame()
+                if not df_match.empty:
+                    ws.cell(r, col).value = int(df_match["合格数"].sum())
+                else:
+                    ws.cell(r, col).value = None
+        # 合計行計算と転記
+        cols = range(3, 15)
+        for col in cols:
+            white_sum = 0
+            yellow_sum = 0
+            for row in range(2, 42):
+                cell_value = ws.cell(row, col).value
+                if cell_value is None:
+                    continue
+                cell_直 = ws.cell(row, 2).value
+                if cell_直 == "白" and isinstance(cell_value, (int, float)):
+                    white_sum += cell_value
+                elif cell_直 == "黄" and isinstance(cell_value, (int, float)):
+                    yellow_sum += cell_value
+            ws.cell(43, col).value = white_sum
+            ws.cell(44, col).value = yellow_sum
+            ws.cell(45, col).value = white_sum + yellow_sum
+        ws.protection.sheet = True
+    else:
+        print(f"シート {sheet_name} は存在しません。処理をスキップします。")
+    # 8: Excelファイル保存
+    wb.save(excel_path)
+if __name__ == "__main__":
+    step2(csv_path, excel_path=None)
+    open_excel(EXCEL_PATH)
